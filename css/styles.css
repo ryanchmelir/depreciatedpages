@@ -352,6 +352,8 @@ svg {
 }
 
 table {
+  display: block;
+  overflow: auto;
   caption-side: bottom;
   border-collapse: collapse;
 }
@@ -18407,7 +18409,7 @@ body {
   font-size: 1.25rem;
 }
 .single-post .single-post-meta-links a {
-  color: #c5ccd6;
+  color: #000000;
   margin-left: 0.5rem;
 }
 .single-post .single-post-meta-links a:hover {

@@ -9,8 +9,11 @@
         <title>Trees Atlanta - Ryan Chmelir</title>
         <link href="css/styles.css" rel="stylesheet" />
         <link rel="icon" type="image/x-icon" href="assets/img/favicon.png" />
+        <link rel="stylesheet" href="/css/vs.min.css">
         <script data-search-pseudo-elements defer src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.29.0/feather.min.js" crossorigin="anonymous"></script>
+        <script src="/js/highlight.min.js"></script>
+        <script>hljs.highlightAll();</script>
     </head>
     <body>
         <div id="layoutDefault">
@@ -51,7 +54,6 @@
                                             <p>Thankfully, there wasn't too much necessary cleansing to be done. Knowing I would eventually map the trees in Tableau, I wanted to convert the x, y coordinates used by ArcGIS to the more commonly used Latitude, Longitude format. The data description included in the Feature Layer showed the coordinates were projected using the "Spatial Reference: 102100 (3857)". A quick google shows 3857 is an ESPG code in reference to a specific type of coordinate projection, and that the standard Lat, Long projection was code 4326.</p>
                                             <p>This can be accomplished using PyProj's Transformer function and pandas' dataframe to apply the function over the dataset:</p>
                                             <pre><code>
-<i class="fa-brands fa-python"></i>
     from pyproj import Transformer
     import pandas as pd
                                                 
@@ -68,12 +70,12 @@
     df['LatLong'] = df.apply(transform_function, axis=1)
                                             
     #writing the dataframe to a new CSV file
-    df.to_csv('projectedtreeinventory.csv', index=False)</code></pre>
+    df.to_csv('projectedtreeinventory.csv', index=False)
+                                            </code></pre>
                                             <h4>Creating the Database</h4>
                                             <p>This section covers setting up the Postgres database within Docker, copying our data using PSQL \copy, and moving our data through the staging table to the final table with corrected datatypes. Feel free to scroll ahead to queries and results!</p>
                                             <p>Copying the data to Docker container, creating PSQL user and database:</p>
                                             <pre><code>
-<i class="fa-brands fa-docker"></i>
     docker cp ./projectedtreeinventory.csv postgres-container:/projectedtreeinventory.csv
     docker exec -it postgres-container psql -U postgres
 
@@ -85,7 +87,6 @@
                                             </code></pre>
                                             <p>Getting the data into our database:</p>
                                             <pre><code>
-<i class="fa-solid fa-database"></i>
     --Creating staging table for initial copying.
     --Data will be transformed into final table after import.
     CREATE TABLE treeInventoryStaging (
@@ -122,7 +123,6 @@
                                             <h4>Queries and Results</h4>
                                             <p>Counts of trees alive and dead, grouped by decade planted.</p>
                                             <pre><code>
-<i class="fa-solid fa-database"></i>
     WITH InventoryWithDecades AS (
     SELECT
         Genus,
@@ -149,7 +149,7 @@
                                             <p>In the query above, we first set a CTE, 'InventoryWithDecades', whose purpose is to create a readable and variable column 'DecadePlanted'. This column uses window functions to partition by decade and pull in the first and last year currently present in the data within a decade. For example, the below output shows 2020 - 2023 as the most recent decade, but once trees planted in 2024 are added to the dataset, the output will show 2020 - 2024.</p>
                                             <p>Next, we pull in the DecadePlanted column, and generate counts of the number of alive and dead trees within each decade. The dataset includes four different statuses we are considering as dead: "Dead", "Vandalized Dead", "VandalizedDead", and "NotFound". We use the LIKE operator to group the different types of "dead" into one bucket. Out of the 97,041 trees in the dataset, only 67 are missing a status and excluded from our results here. </p>
                                             <p>Query output:</p>
-                                            <table class="table table-bordered table-hover table-responsive table-light">
+                                        <code><table class="table table-bordered table-hover table-responsive table-light">
                                                 <tr>
                                                     <th>DecadePlanted</th>
                                                     <th>AliveCount</th>
@@ -180,11 +180,10 @@
                                                     <td>1865</td>
                                                     <td>30979</td>
                                                 </tr>
-                                            </table>
+                                            </table></code>
                                             <p>Next, we will create a similar table as above, but including groups by their genus as well as calculating the percentage that are alive.</p>
                                             <p>The previous CTE is reused here to create the decade grouping.</p>
                                             <pre><code>
-<i class="fa-solid fa-database"></i>
     WITH InventoryWithDecades AS (
     SELECT
         Genus,
@@ -198,7 +197,7 @@
     FROM treeinventory
     WHERE PlantedDate IS NOT NULL
     )
-    
+
     SELECT
         Genus,
         DecadePlanted,
@@ -211,7 +210,7 @@
     ORDER BY TotalPlanted DESC;
                                             </code></pre>
                                             <p>Limiting the results to the first five, here is the query output:</p>
-                                            <table class="table table-bordered table-hover table-responsive table-light">
+                                        <code><table class="table table-bordered table-hover table-responsive table-light">
                                                 <tr>
                                                     <th>Genus</th>
                                                     <th>DecadePlanted</th>
@@ -260,11 +259,10 @@
                                                     <td>3549</td>
                                                     <td>82.11</td>
                                                 </tr>
-                                            </table>
+                                            </table></code>
                                             <p>The queries above, along with a query to pull the Lat, Long, Genus, and Status of each tree is all that was necessary to build the dashboard linked above.</p>
                                             <p>This query shows us the average number of days before trees are updated as dead by genus, along with the percentage of those deaths that are caused by vandalization vs unknown reasons.</p>
                                             <pre><code>
-<i class="fa-solid fa-database"></i>
     SELECT
         Genus,
         COUNT(*) AS TotalDead,
@@ -288,7 +286,7 @@
     HAVING COUNT(*) > 100 -- Filtering for genuses with more than 100 dead or not found trees
     ORDER BY AvgDaysAlive DESC;
                                             </code></pre>
-                                            <table class="table table-bordered table-hover table-responsive table-light">
+                                            <code style="overflow-x: scroll;"><table class="table table-bordered table-hover table-responsive table-light">
                                                 <tr>
                                                     <th>Genus</th>
                                                     <th>TotalDead</th>
@@ -401,7 +399,7 @@
                                                     <td>25.70</td>
                                                     <td>74.30</td>
                                                 </tr>
-                                            </table>
+                                            </table></code>
                                             <hr class="my-5" />
                                             <div class="text-center"><a class="btn btn-transparent-dark" href="portfolio.html">Back to Portfolio</a></div>
                                         </div>

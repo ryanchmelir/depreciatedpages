@@ -48,7 +48,7 @@
                                             <p>You can learn more about the organization at their site <a href="https://treesatlanta.org/">here</a>, but for now here's a quick excerpt from their About page: "Founded in 1985, Trees Atlanta works to mitigate Atlanta’s tree loss, protect its forests, and increase its tree canopy. Empowered by a community of volunteers, Trees Atlanta serves the metro Atlanta area and has grown to become one of Atlanta’s most widely known and supported non-profit organizations."</p>
                                             <p>While moving to Atlanta, I quickly fell in love with the city's abundance of trees, something I was not used to seeing in major cities. At the time, I was living on the eastside beltline, a location Trees Atlanta manages as an Arborterum. Noticing the Trees Atlanta work trucks, volunteers, and employees caring for plants along the beltline, I decided to begin volunteering for the organization in 2023.</p>
                                             <p>After finding Tree Atlanta's <a href="https://www.treesatlanta.org/resources/tree-inventory/">Tree Inventory</a>, I wanted see if I could pull the data and run my own analysis on it.</p>
-                                            <h4>Gathering Data</h4>
+                                            <h4>Gathering & Cleaning Data &vert; <i class="fa-brands fa-python"></i></h4>
                                             <p>Trees Atlanta uses ArcGIS, a geographic information system (GIS) maintained by Esri, to track trees they plant. Reading through their documentation led me to their <a href="https://developers.arcgis.com/rest/services-reference/enterprise/query-feature-service-layer-.htm">querying feature</a>. Using this, I was able to query their Feature Layer "<a href="https://services6.arcgis.com/BZn8g8tzu5WfMokL/ArcGIS/rest/services/Trees_Atlanta_Plant_Inventory_Public_View/FeatureServer/0">Trees Atlanta Plant Inventory</a>" for the full dataset of 97,041 trees, along with a long list of fields:</p>
                                             <p>OBJECTID, PlantingSeason, Genus, Species, Cultivar, PlantedSize, ForestLayer, Neighborhood, SpecialProject, ParcelNUM, StreetPark, Quadrant, City, County, District, NPU, Utilities, GrowthSpace, Program, PlantType, PlantedDate, NotesaboutTree, Status, StatusDateUpdate, StatusComment, ReplacementNeeded, GlobalID, x, y</p>
                                             <p>Thankfully, there wasn't too much necessary cleansing to be done. Knowing I would eventually map the trees in Tableau, I wanted to convert the x, y coordinates used by ArcGIS to the more commonly used Latitude, Longitude format. The data description included in the Feature Layer showed the coordinates were projected using the "Spatial Reference: 102100 (3857)". A quick google shows 3857 is an ESPG code in reference to a specific type of coordinate projection, and that the standard Lat, Long projection was code 4326.</p>
@@ -72,7 +72,11 @@ df['LatLong'] = df.apply(transform_function, axis=1)
 #writing the dataframe to a new CSV file
 df.to_csv('projectedtreeinventory.csv', index=False)
                                             </code></pre>
-                                            <h4>Creating the Database</h4>
+                                            <a class="btn btn-black fw-500" href="assets/files/project files/treeinventory.csv" download="treeinventory.CSV">
+                                                <i class="fa-solid fa-download text-white-75 me-2"></i>
+                                                    Download Dataset
+                                                </a>
+                                            <h4>Creating the Database &vert; <i class="fa-brands fa-docker"></i> &middot; <i class="fa-solid fa-database"></i></h4>
                                             <p>This section covers setting up the Postgres database within Docker, copying our data using PSQL \copy, and moving our data through the staging table to the final table with corrected datatypes. Feel free to scroll ahead to queries and results!</p>
                                             <p>Copying the data to Docker container, creating PSQL user and database:</p>
                                             <pre><code>
@@ -120,7 +124,7 @@ DROP TABLE treeInventoryStaging;
                                             <p>Alright! We've got the data into our database. Time to query!</p>
                                             <!--<img class="img-fluid mb-2 rounded" src="https://source.unsplash.com/sv8oOQaUb-o/990x540" />
                                             <div class="small text-gray-500 text-center">Photo Credit: Unsplash</div>-->
-                                            <h4>Queries and Results</h4>
+                                            <h4>Queries and Results &vert; <i class="fa-solid fa-database"></i></h4>
                                             <p>Counts of trees alive and dead, grouped by decade planted.</p>
                                             <pre><code>
 WITH InventoryWithDecades AS (

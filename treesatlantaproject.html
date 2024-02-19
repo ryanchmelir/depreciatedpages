@@ -185,6 +185,20 @@
                                             <p>The previous CTE is reused here to create the decade grouping.</p>
                                             <pre><code>
 <i class="fa-solid fa-database"></i>
+    WITH InventoryWithDecades AS (
+    SELECT
+        Genus,
+        Status,
+        PlantedDate,
+        CONCAT(
+            MIN(DATE_PART('YEAR', PlantedDate)) OVER(PARTITION BY DATE_PART('DECADE', PlantedDate)), --Minimum Year Present Within a Decade
+            ' - ',
+            MAX(DATE_PART('YEAR', PlantedDate)) OVER(PARTITION BY DATE_PART('DECADE', PlantedDate))  --Maximum Year Present Within a Decade
+            ) AS DecadePlanted 
+    FROM treeinventory
+    WHERE PlantedDate IS NOT NULL
+    )
+    
     SELECT
         Genus,
         DecadePlanted,

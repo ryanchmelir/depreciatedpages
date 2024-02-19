@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <meta name="description" content="" />
+        <meta name="author" content="" />
+        <title>Trees Atlanta - Ryan Chmelir</title>
+        <link href="css/styles.css" rel="stylesheet" />
+        <link rel="icon" type="image/x-icon" href="assets/img/favicon.png" />
+        <script data-search-pseudo-elements defer src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.29.0/feather.min.js" crossorigin="anonymous"></script>
+    </head>
+    <body>
+        <div id="layoutDefault">
+            <div id="layoutDefault_content">
+                <main>
+                    <!-- Navbar-->
+                    <nav class="navbar navbar-marketing navbar-expand-lg bg-white navbar-light">
+                        <div class="container px-5">
+                            <a class="navbar-brand text-dark" href="index.html">home</a>
+                            <a class="navbar-brand text-dark" href="portfolio.html">back to portfolio</a>
+                            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"><i data-feather="menu"></i></button>
+                            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                                <ul class="navbar-nav ms-auto me-lg-5">
+                                    <li class="nav-item"></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </nav>
+                    <!-- Page Header-->
+                    <section class="bg-white py-10">
+                        <div class="container px-5">
+                            <div class="row gx-5 justify-content-center">
+                                <div class="col-lg-10 col-xl-8">
+                                    <div class="single-post">
+                                        <h1>City in a Forest: Trees Atlanta</h1>
+                                        <p class="lead">An analysis of Trees Atanta's planting locations, survival rates, and tree types.</p>            
+                                        <div class="single-post-text my-5">
+                                            <h4>Link to Interactive Tableau Dashboard:</h4>
+                                            <a href="https://public.tableau.com/views/CityinaForestTreesAtlanta/Dashboard?:language=en-US&:sid=&:display_count=n&:origin=viz_share_link" target="_blank"><img class="img-fluid mb-2" src="/dist/assets/img/projects/TreesAtlantaDashboard.png"/></a>
+                                            <h4>About</h4>
+                                            <p>Trees Atlanta is a nonprofit community group with a wide range of programs in Atlanta centered around the protection, care, and improvement of Atlanta's urban forest.</p>
+                                            <p>You can learn more about the organization at their site <a href="https://treesatlanta.org/">here</a>, but for now here's a quick excerpt from their About page: "Founded in 1985, Trees Atlanta works to mitigate Atlanta’s tree loss, protect its forests, and increase its tree canopy. Empowered by a community of volunteers, Trees Atlanta serves the metro Atlanta area and has grown to become one of Atlanta’s most widely known and supported non-profit organizations."</p>
+                                            <p>While moving to Atlanta, I quickly fell in love with the city's abundance of trees, something I was not used to seeing in major cities. At the time, I was living on the eastside beltline, a location Trees Atlanta manages as an Arborterum. Noticing the Trees Atlanta work trucks, volunteers, and employees caring for plants along the beltline, I decided to begin volunteering for the organization in 2023.</p>
+                                            <p>After finding Tree Atlanta's <a href="https://www.treesatlanta.org/resources/tree-inventory/">Tree Inventory</a>, I wanted see if I could pull the data and run my own analysis on it.</p>
+                                            <h4>Gathering Data</h4>
+                                            <p>Trees Atlanta uses ArcGIS, a geographic information system (GIS) maintained by Esri, to track trees they plant. Reading through their documentation led me to their <a href="https://developers.arcgis.com/rest/services-reference/enterprise/query-feature-service-layer-.htm">querying feature</a>. Using this, I was able to query their Feature Layer "<a href="https://services6.arcgis.com/BZn8g8tzu5WfMokL/ArcGIS/rest/services/Trees_Atlanta_Plant_Inventory_Public_View/FeatureServer/0">Trees Atlanta Plant Inventory</a>" for the full dataset of 97,041 trees, along with a long list of fields:</p>
+                                            <p>OBJECTID, PlantingSeason, Genus, Species, Cultivar, PlantedSize, ForestLayer, Neighborhood, SpecialProject, ParcelNUM, StreetPark, Quadrant, City, County, District, NPU, Utilities, GrowthSpace, Program, PlantType, PlantedDate, NotesaboutTree, Status, StatusDateUpdate, StatusComment, ReplacementNeeded, GlobalID, x, y</p>
+                                            <p>Thankfully, there wasn't too much necessary cleansing to be done. Knowing I would eventually map the trees in Tableau, I wanted to convert the x, y coordinates used by ArcGIS to the more commonly used Latitude, Longitude format. The data description included in the Feature Layer showed the coordinates were projected using the "Spatial Reference: 102100 (3857)". A quick google shows 3857 is an ESPG code in reference to a specific type of coordinate projection, and that the standard Lat, Long projection was code 4326.</p>
+                                            <p>This can be accomplished using PyProj's Transformer function and pandas' dataframe to apply the function over the dataset:</p>
+                                            <pre><code>
+<i class="fa-brands fa-python"></i>
+    from pyproj import Transformer
+    import pandas as pd
+                                                
+    #reading file into pandas dataframe
+    df = pd.read_csv('treeinventory.csv')
+                                            
+    #defining transformation function
+    def transform_function(row):
+        transformer = Transformer.from_crs("EPSG:3857", "EPSG:4326")
+        result = transformer.transform(row['x'],row['y'])
+        return result
+                                            
+    #applying the function to each row in the dataframe
+    df['LatLong'] = df.apply(transform_function, axis=1)
+                                            
+    #writing the dataframe to a new CSV file
+    df.to_csv('projectedtreeinventory.csv', index=False)</code></pre>
+                                            <h4>Creating the Database</h4>
+                                            <p>This section covers setting up the Postgres database within Docker, copying our data using PSQL \copy, and moving our data through the staging table to the final table with corrected datatypes. Feel free to scroll ahead to queries and results!</p>
+                                            <p>Copying the data to Docker container, creating PSQL user and database:</p>
+                                            <pre><code>
+<i class="fa-brands fa-docker"></i>
+    docker cp ./projectedtreeinventory.csv postgres-container:/projectedtreeinventory.csv
+    docker exec -it postgres-container psql -U postgres
+
+    CREATE USER trees WITH PASSWORD '1234';
+    CREATE DATABASE treesdb WITH OWNER 'trees';
+    \q
+
+    docker exec -it postgres-container psql -U trees treesdb;
+                                            </code></pre>
+                                            <p>Getting the data into our database:</p>
+                                            <pre><code>
+<i class="fa-solid fa-database"></i>
+    --Creating staging table for initial copying.
+    --Data will be transformed into final table after import.
+    CREATE TABLE treeInventoryStaging (
+        OBJECTID TEXT, PlantingSeason TEXT, Genus TEXT, Species TEXT, Cultivar TEXT, PlantedSize TEXT, ForestLayer TEXT, Neighborhood TEXT, SpecialProject TEXT, ParcelNUM TEXT, StreetPark TEXT, Quadrant TEXT, City TEXT, County TEXT, District TEXT, NPU TEXT, Utilities TEXT, GrowthSpace TEXT, Program TEXT, PlantType TEXT, PlantedDate TEXT, NotesaboutTree TEXT, Status TEXT, StatusDateUpdate TEXT, StatusComment TEXT, ReplacementNeeded TEXT, GlobalID TEXT, x TEXT, y TEXT, Latitude TEXT, Longitude TEXT
+    );
+
+    --Copying the CSV into our staging table.
+    \copy treeInventoryStaging(OBJECTID,PlantingSeason,Genus,Species,Cultivar,PlantedSize,ForestLayer,Neighborhood,SpecialProject,ParcelNUM,StreetPark,Quadrant,City,County,District,NPU,Utilities,GrowthSpace,Program,PlantType,PlantedDate,NotesaboutTree,Status,StatusDateUpdate,StatusComment,ReplacementNeeded,GlobalID,x,y,Latitude,Longitude)
+    FROM 'projectedtreeinventory.csv' WITH DELIMITER ',' CSV;
+
+    --Creating final table with fixed datatypes.
+    --Most are kept as text. Changes include OBJECTID as an int primary key, and various date, integer, and numeric fields.
+    CREATE TABLE treeInventory (
+        OBJECTID INTEGER PRIMARY KEY, PlantingSeason TEXT, Genus TEXT, Species TEXT, Cultivar TEXT, PlantedSize TEXT, ForestLayer TEXT, Neighborhood TEXT, SpecialProject TEXT, ParcelNUM SMALLINT, StreetPark TEXT, Quadrant TEXT, City TEXT, County TEXT, District TEXT, NPU TEXT, Utilities TEXT, GrowthSpace TEXT, Program TEXT, PlantType TEXT, PlantedDate DATE, NotesaboutTree TEXT, Status TEXT, StatusDateUpdate DATE, StatusComment TEXT, ReplacementNeeded TEXT, GlobalID TEXT, x NUMERIC, y NUMERIC, Latitude NUMERIC, Longitude NUMERIC
+    );
+        
+    --Casting and inserting staged data into final table.
+    INSERT INTO treeInventory
+        SELECT 
+	        CAST(OBJECTID AS INTEGER), PlantingSeason TEXT, Genus, Species, Cultivar, PlantedSize, ForestLayer, Neighborhood, SpecialProject TEXT, CAST(ParcelNUM AS SMALLINT), StreetPark, Quadrant, City, County, District, NPU, Utilities, GrowthSpace, Program, PlantType, TO_DATE(PlantedDate, 'MM/DD/YY'),  NotesaboutTree, Status, TO_DATE(StatusDateUpdate, 'MM/DD/YY'), StatusComment, ReplacementNeeded, GlobalID, CAST(x AS NUMERIC), CAST(y AS NUMERIC), CAST(Latitude AS NUMERIC), CAST(Longitude AS NUMERIC)
+        FROM treeInventoryStaging;
+
+    --Confirming record count.
+    SELECT 
+        COUNT(DISTINCT OBJECTID) AS treesPlanted
+    FROM treeInventory;
+
+    --Dropping staging table.
+    DROP TABLE treeInventoryStaging;
+                                            </code></pre>
+                                            <p>Alright! We've got the data into our database. Time to query!</p>
+                                            <!--<img class="img-fluid mb-2 rounded" src="https://source.unsplash.com/sv8oOQaUb-o/990x540" />
+                                            <div class="small text-gray-500 text-center">Photo Credit: Unsplash</div>-->
+                                            <h4>Queries and Results</h4>
+                                            <p>Counts of trees alive and dead, grouped by decade planted.</p>
+                                            <pre><code>
+<i class="fa-solid fa-database"></i>
+    WITH InventoryWithDecades AS (
+    SELECT
+        Genus,
+        Status,
+        PlantedDate,
+        CONCAT(
+            MIN(DATE_PART('YEAR', PlantedDate)) OVER(PARTITION BY DATE_PART('DECADE', PlantedDate)), --Minimum Year Present Within a Decade
+            ' - ',
+            MAX(DATE_PART('YEAR', PlantedDate)) OVER(PARTITION BY DATE_PART('DECADE', PlantedDate))  --Maximum Year Present Within a Decade
+            ) AS DecadePlanted 
+    FROM treeinventory
+    WHERE PlantedDate IS NOT NULL
+    )
+
+    SELECT
+        DecadePlanted,
+        COUNT(*) FILTER(WHERE Status = 'Alive') AS AliveCount,
+        COUNT(*) FILTER(WHERE Status LIKE '%Dead%' OR Status LIKE '%Not%Found%') AS DeadCount,
+        COUNT(*) AS TotalPlanted
+    FROM InventoryWithDecades
+    GROUP BY DecadePlanted
+    ORDER BY DecadePlanted;
+                                            </code></pre>
+                                            <p>In the query above, we first set a CTE, 'InventoryWithDecades', whose purpose is to create a readable and variable column 'DecadePlanted'. This column uses window functions to partition by decade and pull in the first and last year currently present in the data within a decade. For example, the below output shows 2020 - 2023 as the most recent decade, but once trees planted in 2024 are added to the dataset, the output will show 2020 - 2024.</p>
+                                            <p>Next, we pull in the DecadePlanted column, and generate counts of the number of alive and dead trees within each decade. The dataset includes four different statuses we are considering as dead: "Dead", "Vandalized Dead", "VandalizedDead", and "NotFound". We use the LIKE operator to group the different types of "dead" into one bucket. Out of the 97,041 trees in the dataset, only 67 are missing a status and excluded from our results here. </p>
+                                            <p>Query output:</p>
+                                            <table class="table table-bordered table-hover table-responsive table-light">
+                                                <tr>
+                                                    <th>DecadePlanted</th>
+                                                    <th>AliveCount</th>
+                                                    <th>DeadCount</th>
+                                                    <th>TotalPlanted</th>
+                                                </tr>
+                                                <tr>
+                                                    <td>1990 - 1999</td>
+                                                    <td>1295</td>
+                                                    <td>337</td>
+                                                    <td>1632</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>2000 - 2009</td>
+                                                    <td>13837</td>
+                                                    <td>4183</td>
+                                                    <td>18020</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>2010 - 2019</td>
+                                                    <td>33866</td>
+                                                    <td>7382</td>
+                                                    <td>41248</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>2020 - 2023</td>
+                                                    <td>29114</td>
+                                                    <td>1865</td>
+                                                    <td>30979</td>
+                                                </tr>
+                                            </table>
+                                            <p>Next, we will create a similar table as above, but including groups by their genus as well as calculating the percentage that are alive.</p>
+                                            <p>The previous CTE is reused here to create the decade grouping.</p>
+                                            <pre><code>
+<i class="fa-solid fa-database"></i>
+    SELECT
+        Genus,
+        DecadePlanted,
+        COUNT(*) FILTER(WHERE Status = 'Alive') AS AliveCount,
+        COUNT(*) FILTER(WHERE Status LIKE '%Dead%' OR Status LIKE '%Not%Found%') AS DeadCount,
+        COUNT(*) AS TotalPlanted,
+        ROUND(100*COALESCE(COUNT(*) FILTER(WHERE Status = 'Alive')::DECIMAL / NULLIF(COUNT(*),0),0),2) AS PercentAlive
+    FROM InventoryWithDecades
+    GROUP BY Genus, DecadePlanted
+    ORDER BY TotalPlanted DESC;
+                                            </code></pre>
+                                            <p>Limiting the results to the first five, here is the query output:</p>
+                                            <table class="table table-bordered table-hover table-responsive table-light">
+                                                <tr>
+                                                    <th>Genus</th>
+                                                    <th>DecadePlanted</th>
+                                                    <th>AliveCount</th>
+                                                    <th>DeadCount</th>
+                                                    <th>TotalPlanted</th>
+                                                    <th>PercentAlive</th>
+                                                </tr>
+                                                <tr>
+                                                    <td>Quercus</td>
+                                                    <td>2010 - 2019</td>
+                                                    <td>4597</td>
+                                                    <td>596</td>
+                                                    <td>5214</td>
+                                                    <td>88.17</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Quercus</td>
+                                                    <td>2020 - 2023</td>
+                                                    <td>4303</td>
+                                                    <td>355</td>
+                                                    <td>4658</td>
+                                                    <td>92.38</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Lagerstroemia</td>
+                                                    <td>2010 - 2019</td>
+                                                    <td>3721</td>
+                                                    <td>432</td>
+                                                    <td>4154</td>
+                                                    <td>89.58</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Cercis</td>
+                                                    <td>2010 - 2019</td>
+                                                    <td>2672</td>
+                                                    <td>1356</td>
+                                                    <td>4028</td>
+                                                    <td>66.34</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Quercus</td>
+                                                    <td>2000 - 2009</td>
+                                                    <td>2914</td>
+                                                    <td>634</td>
+                                                    <td>3549</td>
+                                                    <td>82.11</td>
+                                                </tr>
+                                            </table>
+                                            <p>The queries above, along with a query to pull the Lat, Long, Genus, and Status of each tree is all that was necessary to build the dashboard linked above.</p>
+                                            <p>This query shows us the average number of days before trees are updated as dead by genus, along with the percentage of those deaths that are caused by vandalization vs unknown reasons.</p>
+                                            <pre><code>
+<i class="fa-solid fa-database"></i>
+    SELECT
+        Genus,
+        COUNT(*) AS TotalDead,
+        ROUND(AVG(StatusDateUpdate - PlantedDate), 0) AS AvgDaysAlive,
+        ROUND(COUNT(*) FILTER(WHERE Status LIKE 'Vandalized%Dead')::DECIMAL
+            / COUNT(*) FILTER(WHERE Status LIKE '%Dead%' OR Status LIKE '%Not%Found') * 100.0, 2) AS VandalizedPercent,
+        ROUND(COUNT(*) FILTER(WHERE Status = 'Dead' OR Status LIKE '%NotFound%')::DECIMAL 
+            / COUNT(*) FILTER(WHERE Status LIKE '%Dead%' OR Status LIKE '%Not%Found') * 100.0, 2) AS UnknownDeathPercent
+    FROM treeInventory
+    WHERE 
+        Genus IN ( --Subquery to pull top fiveteen planted genuses
+            SELECT Genus 
+            FROM treeInventory 
+            GROUP BY Genus 
+            ORDER BY Count(Genus) DESC 
+            LIMIT 15)
+        AND StatusDateUpdate IS NOT NULL --Only including trees with status update dates for a more accurate average days alive
+        AND Status LIKE '%Dead%' 
+        OR Status LIKE '%Not%Found%'
+    GROUP BY Genus
+    HAVING COUNT(*) > 100 -- Filtering for genuses with more than 100 dead or not found trees
+    ORDER BY AvgDaysAlive DESC;
+                                            </code></pre>
+                                            <table class="table table-bordered table-hover table-responsive table-light">
+                                                <tr>
+                                                    <th>Genus</th>
+                                                    <th>TotalDead</th>
+                                                    <th>AvgDaysAlive</th>
+                                                    <th>VandalizedPercent</th>
+                                                    <th>UnknownDeathPercent</th>
+                                                </tr>
+                                                <tr>
+                                                    <td>Acer</td>
+                                                    <td>921</td>
+                                                    <td>3754</td>
+                                                    <td>13.68</td>
+                                                    <td>86.32</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Ulmus</td>
+                                                    <td>313</td>
+                                                    <td>3697</td>
+                                                    <td>17.89</td>
+                                                    <td>82.11</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Quercus</td>
+                                                    <td>1341</td>
+                                                    <td>3351</td>
+                                                    <td>12.98</td>
+                                                    <td>87.02</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Lagerstroemia</td>
+                                                    <td>686</td>
+                                                    <td>3066</td>
+                                                    <td>28.43</td>
+                                                    <td>71.57</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Nyssa</td>
+                                                    <td>464</td>
+                                                    <td>2948</td>
+                                                    <td>14.44</td>
+                                                    <td>85.56</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Ilex</td>
+                                                    <td>128</td>
+                                                    <td>2841</td>
+                                                    <td>15.63</td>
+                                                    <td>84.38</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Carpinus</td>
+                                                    <td>246</td>
+                                                    <td>2800</td>
+                                                    <td>16.67</td>
+                                                    <td>83.33</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Parrotia</td>
+                                                    <td>181</td>
+                                                    <td>2746</td>
+                                                    <td>16.57</td>
+                                                    <td>83.43</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Chionanthus</td>
+                                                    <td>305</td>
+                                                    <td>2628</td>
+                                                    <td>25.90</td>
+                                                    <td>74.10</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Taxodium</td>
+                                                    <td>166</td>
+                                                    <td>2513</td>
+                                                    <td>16.87</td>
+                                                    <td>83.13</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Amelanchier</td>
+                                                    <td>455</td>
+                                                    <td>2406</td>
+                                                    <td>13.41</td>
+                                                    <td>86.59</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Cercis</td>
+                                                    <td>1853</td>
+                                                    <td>2336</td>
+                                                    <td>17.16</td>
+                                                    <td>82.84</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Cornus</td>
+                                                    <td>1038</td>
+                                                    <td>2316</td>
+                                                    <td>8.86</td>
+                                                    <td>91.14</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Liriodendron</td>
+                                                    <td>207</td>
+                                                    <td>2121</td>
+                                                    <td>7.25</td>
+                                                    <td>92.75</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Magnolia</td>
+                                                    <td>747</td>
+                                                    <td>1962</td>
+                                                    <td>25.70</td>
+                                                    <td>74.30</td>
+                                                </tr>
+                                            </table>
+                                            <hr class="my-5" />
+                                            <div class="text-center"><a class="btn btn-transparent-dark" href="portfolio.html">Back to Portfolio</a></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </main>
+            </div>
+        </div>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+        <script src="js/scripts.js"></script>
+    </body>
+</html>

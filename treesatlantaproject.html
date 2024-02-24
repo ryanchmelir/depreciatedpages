@@ -13,6 +13,7 @@
         <script data-search-pseudo-elements defer src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.29.0/feather.min.js" crossorigin="anonymous"></script>
         <script src="/js/highlight.min.js"></script>
+        <link rel="stylesheet" href="css/charts.min.css">
         <script>hljs.highlightAll();</script>
     </head>
     <body>
@@ -265,7 +266,7 @@ ORDER BY TotalPlanted DESC;
                                                 </tr>
                                             </table></code>
                                             <p>The queries above, along with a query to pull the Lat, Long, Genus, and Status of each tree is all that was necessary to build the dashboard linked above.</p>
-                                            <p>This query shows us the average number of days before trees are updated as dead by genus, along with the percentage of those deaths that are caused by vandalization vs unknown reasons.</p>
+                                            <p>The query below shows us the average number of days before trees are updated as dead, grouped by genus, along with the percentage of those deaths that are caused by vandalization ('vandalized dead', 'vandalizeddead') vs unknown reasons ('dead', 'notfound').</p>
                                             <pre><code>
 SELECT
     Genus,
@@ -290,7 +291,8 @@ GROUP BY Genus
 HAVING COUNT(*) > 100 -- Filtering for genuses with more than 100 dead or not found trees
 ORDER BY AvgDaysAlive DESC;
                                             </code></pre>
-                                            <code style="overflow-x: scroll;"><table class="table table-bordered table-hover table-responsive table-light">
+                                            <p>The results are limited to the top 15 genuses by planting volume with more than 100 dead trees. We can see Lagerstroemia is the most likely of that group to die by vandlization. Magnolia has the lowest average lifespan before death, grouped with a high likelihood of vandlization.</p>
+                                            <code><table class="table table-bordered table-hover table-responsive table-light">
                                                 <tr>
                                                     <th>Genus</th>
                                                     <th>TotalDead</th>
@@ -404,6 +406,101 @@ ORDER BY AvgDaysAlive DESC;
                                                     <td>74.30</td>
                                                 </tr>
                                             </table></code>
+                                            <p>Here, we do an analysis on the day of week and time of year Trees Atlanta plants trees.</p>
+                                            <pre><code>
+SELECT
+	CASE 
+		WHEN EXTRACT(MONTH FROM planteddate) BETWEEN 3 AND 5 THEN 'Spring' --Case statement groups the planted month within seasons
+		WHEN EXTRACT(MONTH FROM planteddate) BETWEEN 6 AND 8 THEN 'Summer'
+		WHEN EXTRACT(MONTH FROM planteddate) BETWEEN 9 AND 11 THEN 'Fall'
+		ELSE 'Winter' --Winter is left last as it's the only season where the months reset (12, 1, 2).
+	END AS Season,
+	TO_CHAR(PlantedDate,'Day') AS PlantedDay, --Pulling the day of the week in text from the planted date.
+	COUNT(*)
+FROM treeinventory
+WHERE PlantedDate IS NOT NULL
+GROUP BY Season, PlantedDay;
+                                            </code></pre>
+                                            <p>The results look something like this (limiting to the first couple of rows):</p>
+                                            <code>
+                                                <table class="table table-bordered table-hover table-responsive table-light">
+                                                    <tr>
+                                                        <th>season</th>
+                                                        <th>plantedday</th>
+                                                        <th>count</th>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Spring</td>
+                                                        <td>Monday   </td>
+                                                        <td>1027</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Fall</td>
+                                                        <td>Tuesday  </td>
+                                                        <td>1327</td>
+                                                    </tr>
+                                                </table>
+                                            </code>
+                                            <p>Visualizing the results below, we can see Trees Atlanta primarily plants in the Winter, and as a volunteer organization, plants mostly on Saturdays!</p>
+                                            <img class="img-fluid mb-2" src="/assets/img/projects/TreeAtlanta/dayofweekdist.png"/>
+                                            <p>Finally, we'll take a look at plantings by neighborhood since 1996. To start, we'll need to pull a rolling total of trees planted grouped by neighborhood and ordered by year.</p>
+                                            <pre><code>
+SELECT
+	EXTRACT('YEAR' FROM PlantedDate) AS PlantedYear,
+	Neighborhood,
+	SUM(COUNT(*)) OVER(PARTITION BY Neighborhood ORDER BY EXTRACT('YEAR' FROM PlantedDate)) AS PlantedAmount --Rolling total of plantings, paritioned by neighborhood and ordered by year planted.
+FROM treeinventory
+WHERE 
+	PlantedDate IS NOT NULL
+	AND Neighborhood IS NOT NULL
+GROUP BY PlantedYear, Neighborhood;
+                                            </code></pre>
+                                            <p>This data is then fed into a python library, <a href="https://www.dexplo.org/bar_chart_race/">bar_chart_race</a>. This library reformats our data from it's current long format into a wide format and then creates a bar chart race.</p>
+                                            <pre><code>
+import bar_chart_race as bcr
+import pandas as pd
+
+df = pd.read_csv('LongDataYears.csv')
+
+df_values, df_ranks = bcr.prepare_long_data(df, index='plantedyear', columns='neighborhood',
+                                            values='plantedamount', steps_per_period=10, 
+                                            orientation='h', sort='desc')
+
+bcr.bar_chart_race(
+    df=df_values,
+    filename='NeighborhoodBarRace.mp4',
+    orientation='h',
+    sort='desc',
+    n_bars=10,
+    fixed_order=False,
+    fixed_max=False,
+    steps_per_period=8,
+    interpolate_period=False,
+    label_bars=True,
+    bar_size=.95,
+    period_label={'x': .99, 'y': .1, 'ha': 'right'},
+    period_length=300,
+    figsize=(6, 3.5),
+    dpi=288,
+    cmap='tab20',
+    title='Tree Planting by Neighborhood',
+    title_size='',
+    bar_label_size=7,
+    tick_label_size=7,
+    shared_fontdict={'family' : 'Helvetica', 'color' : '.1'},
+    scale='linear',
+    writer=None,
+    fig=None,
+    bar_kwargs={'alpha': .7},
+    filter_column_colors=True)
+                                            </code></pre>
+                                            <div class="video">
+                                            <video class="video-link" controls>
+                                                <source src="/assets/video/projects/treesatlanta/NeighborhoodBarRace.mp4" type="video/mp4">
+                                              Your browser does not support the video tag.
+                                              </video>
+                                            </div>
+                                            <p>The Beltline arborterum's rapid growth beginning in 2017 coincides with the <a href="https://beltline.org/2017/02/22/2017-the-biggest-year-yet-for-the-atlanta-beltline/">opening of the Beltline's Westside Trail and Eastside Trail Extension.</a></p>
                                             <hr class="my-5" />
                                             <div class="text-center"><a class="btn btn-transparent-dark" href="portfolio.html">Back to Portfolio</a></div>
                                         </div>

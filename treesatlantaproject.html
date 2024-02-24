@@ -125,7 +125,7 @@ DROP TABLE treeInventoryStaging;
                                             <p>Alright! We've got the data into our database. Time to query!</p>
                                             <!--<img class="img-fluid mb-2 rounded" src="https://source.unsplash.com/sv8oOQaUb-o/990x540" />
                                             <div class="small text-gray-500 text-center">Photo Credit: Unsplash</div>-->
-                                            <h4>Queries and Results &vert; <i class="fa-solid fa-database"></i></h4>
+                                            <h4>Queries and Results &vert; <i class="fa-solid fa-database"></i> &middot; <i class="fa-brands fa-python"></i></h4>
                                             <p>Counts of trees alive and dead, grouped by decade planted.</p>
                                             <pre><code>
 WITH InventoryWithDecades AS (
@@ -443,12 +443,12 @@ GROUP BY Season, PlantedDay;
                                             </code>
                                             <p>Visualizing the results below, we can see Trees Atlanta primarily plants in the Winter, and as a volunteer organization, plants mostly on Saturdays!</p>
                                             <img class="img-fluid mb-2" src="/assets/img/projects/TreeAtlanta/dayofweekdist.png"/>
-                                            <p>Finally, we'll take a look at plantings by neighborhood since 1996. To start, we'll need to pull a rolling total of trees planted grouped by neighborhood and ordered by year.</p>
+                                            <p>Finally, we'll take a look at plantings by neighborhood since 1996. To start, we'll need to pull a running total of trees planted grouped by neighborhood and ordered by year.</p>
                                             <pre><code>
 SELECT
 	EXTRACT('YEAR' FROM PlantedDate) AS PlantedYear,
 	Neighborhood,
-	SUM(COUNT(*)) OVER(PARTITION BY Neighborhood ORDER BY EXTRACT('YEAR' FROM PlantedDate)) AS PlantedAmount --Rolling total of plantings, paritioned by neighborhood and ordered by year planted.
+	SUM(COUNT(*)) OVER(PARTITION BY Neighborhood ORDER BY EXTRACT('YEAR' FROM PlantedDate)) AS PlantedAmount --Running total of plantings, paritioned by neighborhood and ordered by year planted.
 FROM treeinventory
 WHERE 
 	PlantedDate IS NOT NULL
